@@ -171,7 +171,7 @@ namespace Youtube_Live_Chat_Reformat
                             string responseString = await browser.GetBrowser().MainFrame.GetSourceAsync();
                             responseString = Regex.Replace(responseString, "<script.*?>.*?</script>", "", RegexOptions.IgnoreCase);
                             var bodyIndex = responseString.IndexOf("</body>");
-                            var injector = File.ReadAllText("Assets\\");
+                            var injector = File.ReadAllText("Assets\\inject.js");
                             responseString = responseString.Insert(bodyIndex, @"
 <script>
    document.getElementById('item-offset').style.height = 'auto';
