@@ -201,6 +201,10 @@ namespace Youtube_Live_Chat_Reformat
                         {
                             WebSocketContext webSocketContext = null;
                             webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
+                            if(WebSocket != null)
+                            {
+                                await WebSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+                            }
                             WebSocket = webSocketContext.WebSocket;
                         }
                         else
