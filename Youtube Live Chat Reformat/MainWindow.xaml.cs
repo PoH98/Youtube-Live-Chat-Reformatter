@@ -118,16 +118,19 @@ namespace Youtube_Live_Chat_Reformat
                         WebSocket = null;
                     }
                 }
-                var insert = new ChatData
+                if (string.IsNullOrEmpty(e.Comment))
                 {
-                    Comment = e.Comment,
-                    User = e.User,
-                    SCAmount = e.SuperChat ? e.SuperChatAmount : 0
-                };
-                _ = collection.Insert(insert);
-                if (Counter != null)
-                {
-                    Counter.AddMessage(insert);
+                    var insert = new ChatData
+                    {
+                        Comment = e.Comment,
+                        User = e.User,
+                        SCAmount = e.SuperChat ? e.SuperChatAmount : 0
+                    };
+                    _ = collection.Insert(insert);
+                    if (Counter != null)
+                    {
+                        Counter.AddMessage(insert);
+                    }
                 }
             }
             _liteDatabase.Dispose();

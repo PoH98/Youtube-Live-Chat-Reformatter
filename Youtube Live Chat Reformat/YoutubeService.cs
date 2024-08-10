@@ -49,10 +49,13 @@ namespace Youtube_Live_Chat_Reformat
                     var last = """";
                     setInterval(function () {
                         (function (t) {
+                            if(t.length <= 0){
+                               return;
+                            }
                             if (last != (cid = t[t.length - 1].id))
                                 for (var e = t.length; e--;) {
                                     if (last == t[e].id) return last = cid;
-                                    t[e].children[1].children[3].textContent && bound.onText(t[e].children[1].children[1].children[1].textContent, t[e].children[1].children[3].textContent, t[e].outerHTML);
+                                    bound.onText(t[e].children[1].children[1].children[1].textContent, t[e].children[1].children[3].textContent, t[e].outerHTML);
                                     last = cid;
                                     return;
                                 }
@@ -73,7 +76,7 @@ namespace Youtube_Live_Chat_Reformat
                                     if (last == t[e].id) return last = cid;
                                     let userName = t[e].querySelectorAll(""#author-name"")[0].textContent;
                                     let amount = Number(t[e].querySelectorAll(""#purchase-amount-column"")[0].textContent.replace(/[^0-9\.]+/g,""""))
-                                    t[e].children[0].children[1].children[0].textContent && bound.onSuperChat(userName, t[e].children[0].children[1].children[0].textContent, t[e].outerHTML);
+                                    amount && bound.onSuperChat(userName, t[e].children[0].children[1].children[0].textContent, t[e].outerHTML);
                                     last = cid;
                                     return;
                                 }
