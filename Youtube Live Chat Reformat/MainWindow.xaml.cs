@@ -103,36 +103,44 @@ namespace Youtube_Live_Chat_Reformat
             LiteDatabase _liteDatabase = new LiteDatabase(liteDBString);
             ILiteCollection<ChatData> collection = _liteDatabase.GetCollection<ChatData>("chat");
             IEnumerable<ChatData> list = collection.FindAll();
-            ChatData last = list.Count() > 0 ? list.Last() : new ChatData();
-            if (!(last.User == e.User && last.Comment == e.Comment))
+            try
             {
-                if(WebSocket != null)
+                ChatData last = list.Count() > 0 ? list.Last() : new ChatData();
+                if (!(last.User == e.User && last.Comment == e.Comment))
                 {
-                    try
+                    if (WebSocket != null)
                     {
-                        var data = Encoding.UTF8.GetBytes(e.Html);
-                        await WebSocket.SendAsync(new ArraySegment<byte>(data, 0, data.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                        try
+                        {
+                            var data = Encoding.UTF8.GetBytes(e.Html);
+                            await WebSocket.SendAsync(new ArraySegment<byte>(data, 0, data.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                        }
+                        catch (WebSocketException)
+                        {
+                            WebSocket = null;
+                        }
                     }
-                    catch(WebSocketException)
+                    if (string.IsNullOrEmpty(e.Comment))
                     {
-                        WebSocket = null;
-                    }
-                }
-                if (string.IsNullOrEmpty(e.Comment))
-                {
-                    var insert = new ChatData
-                    {
-                        Comment = e.Comment,
-                        User = e.User,
-                        SCAmount = e.SuperChat ? e.SuperChatAmount : 0
-                    };
-                    _ = collection.Insert(insert);
-                    if (Counter != null)
-                    {
-                        Counter.AddMessage(insert);
+                        var insert = new ChatData
+                        {
+                            Comment = e.Comment,
+                            User = e.User,
+                            SCAmount = e.SuperChat ? e.SuperChatAmount : 0
+                        };
+                        _ = collection.Insert(insert);
+                        if (Counter != null)
+                        {
+                            Counter.AddMessage(insert);
+                        }
                     }
                 }
             }
+            catch
+            {
+                _liteDatabase.DropCollection("chat");
+            }
+
             _liteDatabase.Dispose();
         }
 

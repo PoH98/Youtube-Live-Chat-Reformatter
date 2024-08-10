@@ -60,7 +60,7 @@ namespace Youtube_Live_Chat_Reformat
                                     return;
                                 }
                         })(document.getElementsByTagName(""yt-live-chat-text-message-renderer""))
-                    }, 50);
+                    }, 25);
                 })()");
 
                 e.Frame.ExecuteJavaScriptAsync(@"(async function () {
@@ -75,12 +75,50 @@ namespace Youtube_Live_Chat_Reformat
                                 for (var e = t.length; e--;) {
                                     if (last == t[e].id) return last = cid;
                                     let userName = t[e].querySelectorAll(""#author-name"")[0].textContent;
-                                    let amount = Number(t[e].querySelectorAll(""#purchase-amount-column"")[0].textContent.replace(/[^0-9\.]+/g,""""))
-                                    amount && bound.onSuperChat(userName, t[e].children[0].children[1].children[0].textContent, t[e].outerHTML);
+                                    let amount = parseFloat(t[e].querySelectorAll(""#purchase-amount-column"")[0].textContent.replace(/[^0-9\.]+/g,""""))
+                                    amount && bound.onSuperChat(userName, t[e].children[0].children[1].children[0].textContent, amount, t[e].outerHTML);
                                     last = cid;
                                     return;
                                 }
                         })(document.getElementsByTagName(""yt-live-chat-paid-message-renderer""))
+                    }, 100);
+                })()");
+
+                e.Frame.ExecuteJavaScriptAsync(@"(async function () {
+                    await CefSharp.BindObjectAsync('boundAsync', 'bound');
+                    var last = """";
+                    setInterval(function () {
+                        (function (t) {
+                            if(t.length <= 0){
+                               return;
+                            }
+                            if (last != (cid = t[t.length - 1].id))
+                                for (var e = t.length; e--;) {
+                                    if (last == t[e].id) return last = cid;
+                                    bound.onText(t[e].children[0].children[0].children[1].textContent, t[e].children[0].children[1].textContent, t[e].outerHTML);
+                                    last = cid;
+                                    return;
+                                }
+                        })(document.getElementsByTagName(""yt-live-chat-membership-item-renderer""))
+                    }, 100);
+                })()");
+
+                e.Frame.ExecuteJavaScriptAsync(@"(async function () {
+                    await CefSharp.BindObjectAsync('boundAsync', 'bound');
+                    var last = """";
+                    setInterval(function () {
+                        (function (t) {
+                            if(t.length <= 0){
+                               return;
+                            }
+                            if (last != (cid = t[t.length - 1].id))
+                                for (var e = t.length; e--;) {
+                                    if (last == t[e].id) return last = cid;
+                                    bound.onText(t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[0].textContent, t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[2].textContent, t[e].outerHTML);
+                                    last = cid;
+                                    return;
+                                }
+                        })(document.getElementsByTagName(""ytd-sponsorships-live-chat-gift-purchase-announcement-renderer""))
                     }, 100);
                 })()");
 
@@ -122,7 +160,7 @@ namespace Youtube_Live_Chat_Reformat
                 });
             }
 
-            public void onSuperChat(string name, string text, decimal scAmount, string html)
+            public void onSuperChat(string name, string text, double scAmount, string html)
             {
                 service.CommentReceived?.Invoke(this, new CommentEvent
                 {
@@ -140,7 +178,7 @@ namespace Youtube_Live_Chat_Reformat
             public string Comment { get; set; }
             public string User { get; set; }
             public bool SuperChat { get; set; }
-            public decimal SuperChatAmount { get; set; }
+            public double SuperChatAmount { get; set; }
             public string Html { get; set; }
         }
     }

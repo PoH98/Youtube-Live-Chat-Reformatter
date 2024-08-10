@@ -4,6 +4,6 @@
     {
         public string User { get; set; }
         public string Comment { get; set; }
-        public decimal SCAmount { get; set; }
+        public double SCAmount { get; set; }
     }
 }
