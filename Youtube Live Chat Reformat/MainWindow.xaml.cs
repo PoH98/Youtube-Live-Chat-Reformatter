@@ -120,7 +120,7 @@ namespace Youtube_Live_Chat_Reformat
                             WebSocket = null;
                         }
                     }
-                    if (string.IsNullOrEmpty(e.Comment))
+                    if (!string.IsNullOrEmpty(e.Comment))
                     {
                         var insert = new ChatData
                         {
