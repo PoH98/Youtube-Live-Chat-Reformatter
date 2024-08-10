@@ -108,8 +108,15 @@ namespace Youtube_Live_Chat_Reformat
             {
                 if(WebSocket != null)
                 {
-                    var data = Encoding.UTF8.GetBytes(e.Html);
-                    WebSocket.SendAsync(new ArraySegment<byte>(data, 0, data.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                    try
+                    {
+                        var data = Encoding.UTF8.GetBytes(e.Html);
+                        WebSocket.SendAsync(new ArraySegment<byte>(data, 0, data.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                    }
+                    catch(WebSocketException)
+                    {
+                        WebSocket = null;
+                    }
                 }
                 var insert = new ChatData
                 {
@@ -204,6 +211,7 @@ namespace Youtube_Live_Chat_Reformat
                             if(WebSocket != null)
                             {
                                 await WebSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+                                WebSocket = null;
                             }
                             WebSocket = webSocketContext.WebSocket;
                         }
