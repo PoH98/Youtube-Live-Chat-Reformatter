@@ -98,7 +98,7 @@ namespace Youtube_Live_Chat_Reformat
             }
         }
 
-        private void _youtubeService_CommentReceived(object sender, YoutubeService.CommentEvent e)
+        private async void _youtubeService_CommentReceived(object sender, YoutubeService.CommentEvent e)
         {
             LiteDatabase _liteDatabase = new LiteDatabase(liteDBString);
             ILiteCollection<ChatData> collection = _liteDatabase.GetCollection<ChatData>("chat");
@@ -111,7 +111,7 @@ namespace Youtube_Live_Chat_Reformat
                     try
                     {
                         var data = Encoding.UTF8.GetBytes(e.Html);
-                        WebSocket.SendAsync(new ArraySegment<byte>(data, 0, data.Length), WebSocketMessageType.Text, true, CancellationToken.None);
+                        await WebSocket.SendAsync(new ArraySegment<byte>(data, 0, data.Length), WebSocketMessageType.Text, true, CancellationToken.None);
                     }
                     catch(WebSocketException)
                     {
@@ -210,8 +210,19 @@ namespace Youtube_Live_Chat_Reformat
                             webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
                             if(WebSocket != null)
                             {
-                                await WebSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
-                                WebSocket = null;
+                                try
+                                {
+                                    await WebSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+
+                                }
+                                catch
+                                {
+
+                                }
+                                finally
+                                {
+                                    WebSocket = null;
+                                }
                             }
                             WebSocket = webSocketContext.WebSocket;
                         }
