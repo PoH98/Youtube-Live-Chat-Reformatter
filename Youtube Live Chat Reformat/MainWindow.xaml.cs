@@ -199,6 +199,7 @@ namespace Youtube_Live_Chat_Reformat
                             byte[] buffer = Encoding.UTF8.GetBytes(responseString);
                             // Get a response stream and write the response to it.
                             response.ContentLength64 = buffer.Length;
+                            response.ContentEncoding = Encoding.UTF8;
                             Stream output = response.OutputStream;
                             output.Write(buffer, 0, buffer.Length);
                             // You must close the output stream.
