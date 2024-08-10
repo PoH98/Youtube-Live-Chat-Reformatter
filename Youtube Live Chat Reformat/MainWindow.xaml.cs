@@ -200,6 +200,7 @@ namespace Youtube_Live_Chat_Reformat
                             // Get a response stream and write the response to it.
                             response.ContentLength64 = buffer.Length;
                             response.ContentEncoding = Encoding.UTF8;
+                            response.ContentType = "text/html";
                             Stream output = response.OutputStream;
                             output.Write(buffer, 0, buffer.Length);
                             // You must close the output stream.
@@ -214,7 +215,6 @@ namespace Youtube_Live_Chat_Reformat
                                 try
                                 {
                                     await WebSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
-
                                 }
                                 catch
                                 {
