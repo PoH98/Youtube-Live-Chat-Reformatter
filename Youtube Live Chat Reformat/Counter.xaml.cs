@@ -114,42 +114,66 @@ namespace Youtube_Live_Chat_Reformat
                 result = result.Where((x) => QueryFilter(x, strFilters, numFilters));
                 Dispatcher.Invoke(() =>
                 {
-                    grid.ItemsSource = result;
-                    Count.Content = result.Count();
-                    foreach (string filter in strFilters)
+                    try
                     {
-                        counters.Add(new CounterData
+                        grid.ItemsSource = result.ToList();
+                        Count.Content = result.Count();
+                        foreach (string filter in strFilters)
                         {
-                            Count = result.Count(x => x.Comment.StartsWith(filter)),
-                            Keyword = filter,
-                        });
+                            counters.Add(new CounterData
+                            {
+                                Count = result.Count(x => x.Comment.StartsWith(filter)),
+                                Keyword = filter,
+                            });
+                        }
+                        foreach (int filter in numFilters)
+                        {
+                            counters.Add(new CounterData
+                            {
+                                Count = result.Count(x => x.Comment == filter.ToString()),
+                                Keyword = filter.ToString(),
+                            });
+                        }
+                        counter.ItemsSource = counters;
                     }
-                    foreach (int filter in numFilters)
+                    catch
                     {
-                        counters.Add(new CounterData
-                        {
-                            Count = result.Count(x => x.Comment == filter.ToString()),
-                            Keyword = filter.ToString(),
-                        });
+
                     }
-                    counter.ItemsSource = counters;
                 });
             }
             else
             {
                 Dispatcher.Invoke(() =>
                 {
-                    var result = list;
-                    if (showOnce.IsChecked ?? false)
+                    try
                     {
-                        result = result.GroupBy(x => x.User).Select(x => x.First());
+                        var result = list;
+                        if (showOnce.IsChecked ?? false)
+                        {
+                            result = result.GroupBy(x => x.User).Select(x => x.First());
+                        }
+                        grid.ItemsSource = result.ToList();
+                        Count.Content = result.Count();
+                        counter.ItemsSource = counters;
                     }
-                    grid.ItemsSource = result;
-                    Count.Content = result.Count();
-                    counter.ItemsSource = counters;
+                    catch
+                    {
+
+                    }
                 });
             }
-            Dispatcher.Invoke(() => SCAmount.Content = list.Where(x => x.SCAmount > 0).Count());
+            Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    SCAmount.Content = list.Where(x => x.SCAmount > 0).Count();
+                }
+                catch
+                {
+
+                }
+            });
             foreach (var chart in charts)
             {
                 chart.UpdateChart(counters);

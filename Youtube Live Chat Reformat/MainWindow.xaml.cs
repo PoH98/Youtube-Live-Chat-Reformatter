@@ -30,6 +30,7 @@ namespace Youtube_Live_Chat_Reformat
         public string liteDBString;
         private Counter Counter;
         private WebSocket WebSocket;
+        private ILiteCollection<ChatData> collection;
         public MainWindow()
         {
             CefSettings settings = new CefSettings
@@ -100,8 +101,11 @@ namespace Youtube_Live_Chat_Reformat
 
         private async void _youtubeService_CommentReceived(object sender, YoutubeService.CommentEvent e)
         {
-            LiteDatabase _liteDatabase = new LiteDatabase(liteDBString);
-            ILiteCollection<ChatData> collection = _liteDatabase.GetCollection<ChatData>("chat");
+            if(collection == null)
+            {
+                LiteDatabase _liteDatabase = new LiteDatabase(liteDBString);
+                collection = _liteDatabase.GetCollection<ChatData>("chat");
+            }
             IEnumerable<ChatData> list = collection.FindAll();
             try
             {
@@ -138,10 +142,8 @@ namespace Youtube_Live_Chat_Reformat
             }
             catch
             {
-                _liteDatabase.DropCollection("chat");
-            }
 
-            _liteDatabase.Dispose();
+            }
         }
 
         private void FilterWindow(object sender, RoutedEventArgs e)
