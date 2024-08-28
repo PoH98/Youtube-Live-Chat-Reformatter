@@ -44,84 +44,93 @@ namespace Youtube_Live_Chat_Reformat
                 e.Frame.ExecuteJavaScriptAsync("Array.prototype.slice.call(document.getElementsByTagName(\"yt-live-chat-header-renderer\")).forEach((x) => x.remove())");
                 e.Frame.ExecuteJavaScriptAsync("Array.prototype.slice.call(document.getElementsByTagName(\"yt-live-chat-message-input-renderer\")).forEach((x) => x.remove())");
 
-                e.Frame.ExecuteJavaScriptAsync(@"(async function () {
-                    await CefSharp.BindObjectAsync('boundAsync', 'bound');
-                    var last = """";
-                    setInterval(function () {
-                        (function (t) {
-                            if(t.length <= 0){
-                               return;
-                            }
-                            if (last != (cid = t[t.length - 1].id))
-                                for (var e = t.length; e--;) {
-                                    if (last == t[e].id) return last = cid;
-                                    bound.onText(t[e].children[1].children[1].children[1].textContent, t[e].children[1].children[3].textContent, t[e].outerHTML);
-                                    last = cid;
-                                    return;
+                e.Frame.ExecuteJavaScriptAsync(@"
+                var last = """";
+                (async function() { await CefSharp.BindObjectAsync('boundAsync', 'bound'); })();
+                if(!txtLogging)
+                {
+                    (async function () {
+                        setInterval(function () {
+                            (function (t) {
+                                if(t.length <= 0){
+                                   return;
                                 }
-                        })(document.getElementsByTagName(""yt-live-chat-text-message-renderer""))
-                    }, 25);
-                })()");
-
-                e.Frame.ExecuteJavaScriptAsync(@"(async function () {
-                    await CefSharp.BindObjectAsync('boundAsync', 'bound');
-                    var last = """";
-                    setInterval(function () {
-                        (function (t) {
-                            if(t.length <= 0){
-                               return;
-                            }
-                            if (last != (cid = t[t.length - 1].id))
-                                for (var e = t.length; e--;) {
-                                    if (last == t[e].id) return last = cid;
-                                    let userName = t[e].querySelectorAll(""#author-name"")[0].textContent;
-                                    let amount = parseFloat(t[e].querySelectorAll(""#purchase-amount-column"")[0].textContent.replace(/[^0-9\.]+/g,""""))
-                                    amount && bound.onSuperChat(userName, t[e].children[0].children[1].children[0].textContent, amount, t[e].outerHTML);
-                                    last = cid;
-                                    return;
+                                if (last != (cid = t[t.length - 1].id))
+                                    for (var e = t.length; e--;) {
+                                        if (last == t[e].id) return last = cid;
+                                        bound.onText(cid, t[e].children[1].children[1].children[1].textContent, t[e].children[1].children[3].textContent, t[e].outerHTML);
+                                        last = cid;
+                                        return;
+                                    }
+                            })(document.getElementsByTagName(""yt-live-chat-text-message-renderer""))
+                        }, 25);
+                    })()
+                }
+                var txtLogging = true;
+                if(!scLogging)
+                {
+                    (async function () {
+                        setInterval(function () {
+                            (function (t) {
+                                if(t.length <= 0){
+                                   return;
                                 }
-                        })(document.getElementsByTagName(""yt-live-chat-paid-message-renderer""))
-                    }, 100);
-                })()");
-
-                e.Frame.ExecuteJavaScriptAsync(@"(async function () {
-                    await CefSharp.BindObjectAsync('boundAsync', 'bound');
-                    var last = """";
-                    setInterval(function () {
-                        (function (t) {
-                            if(t.length <= 0){
-                               return;
-                            }
-                            if (last != (cid = t[t.length - 1].id))
-                                for (var e = t.length; e--;) {
-                                    if (last == t[e].id) return last = cid;
-                                    bound.onText(t[e].children[0].children[0].children[1].textContent, t[e].children[0].children[1].textContent, t[e].outerHTML);
-                                    last = cid;
-                                    return;
+                                if (last != (cid = t[t.length - 1].id))
+                                    for (var e = t.length; e--;) {
+                                        if (last == t[e].id) return last = cid;
+                                        let userName = t[e].querySelectorAll(""#author-name"")[0].textContent;
+                                        let amount = parseFloat(t[e].querySelectorAll(""#purchase-amount-column"")[0].textContent.replace(/[^0-9\.]+/g,""""))
+                                        amount && bound.onSuperChat(cid, userName, t[e].children[0].children[1].children[0].textContent, amount, t[e].outerHTML);
+                                        last = cid;
+                                        return;
+                                    }
+                            })(document.getElementsByTagName(""yt-live-chat-paid-message-renderer""))
+                        }, 100);
+                    })();
+                }
+                var scLogging = true;
+                if(!memLogging)
+                {
+                    (async function () {
+                        setInterval(function () {
+                            (function (t) {
+                                if(t.length <= 0){
+                                   return;
                                 }
-                        })(document.getElementsByTagName(""yt-live-chat-membership-item-renderer""))
-                    }, 100);
-                })()");
-
-                e.Frame.ExecuteJavaScriptAsync(@"(async function () {
-                    await CefSharp.BindObjectAsync('boundAsync', 'bound');
-                    var last = """";
-                    setInterval(function () {
-                        (function (t) {
-                            if(t.length <= 0){
-                               return;
-                            }
-                            if (last != (cid = t[t.length - 1].id))
-                                for (var e = t.length; e--;) {
-                                    if (last == t[e].id) return last = cid;
-                                    bound.onText(t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[0].textContent, t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[2].textContent, t[e].outerHTML);
-                                    last = cid;
-                                    return;
+                                if (last != (cid = t[t.length - 1].id))
+                                    for (var e = t.length; e--;) {
+                                        if (last == t[e].id) return last = cid;
+                                        bound.onText(cid, t[e].children[0].children[0].children[1].textContent, t[e].children[0].children[1].textContent, t[e].outerHTML);
+                                        last = cid;
+                                        return;
+                                    }
+                            })(document.getElementsByTagName(""yt-live-chat-membership-item-renderer""))
+                        }, 100);
+                    })()
+                }
+                var memLogging = true;
+                if(!sponsorLogging)
+                {
+                    (async function () {
+                        await CefSharp.BindObjectAsync('boundAsync', 'bound');
+                        setInterval(function () {
+                            (function (t) {
+                                if(t.length <= 0){
+                                   return;
                                 }
-                        })(document.getElementsByTagName(""ytd-sponsorships-live-chat-gift-purchase-announcement-renderer""))
-                    }, 100);
-                })()");
-
+                                if (last != (cid = t[t.length - 1].id))
+                                    for (var e = t.length; e--;) {
+                                        if (last == t[e].id) return last = cid;
+                                        bound.onText(cid, t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[0].textContent, t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[2].textContent, t[e].outerHTML);
+                                        last = cid;
+                                        return;
+                                    }
+                            })(document.getElementsByTagName(""ytd-sponsorships-live-chat-gift-purchase-announcement-renderer""))
+                        }, 100);
+                    })()
+                }
+                var sponsorLogging = true;
+                ");
                 if (File.Exists("Assets\\style.css"))
                 {
                     e.Frame.ExecuteJavaScriptAsync(@"
@@ -145,13 +154,19 @@ namespace Youtube_Live_Chat_Reformat
         private class CefObject
         {
             private readonly YoutubeService service;
+            private string lastId;
             public CefObject(YoutubeService service)
             {
                 this.service = service;
             }
 
-            public void onText(string name, string text, string html)
+            public void onText(string cid, string name, string text, string html)
             {
+                if(lastId == cid)
+                {
+                    return;
+                }
+                lastId = cid;
                 service.CommentReceived?.Invoke(this, new CommentEvent
                 {
                     Comment = text,
@@ -160,8 +175,13 @@ namespace Youtube_Live_Chat_Reformat
                 });
             }
 
-            public void onSuperChat(string name, string text, double scAmount, string html)
+            public void onSuperChat(string cid, string name, string text, double scAmount, string html)
             {
+                if (lastId == cid)
+                {
+                    return;
+                }
+                lastId = cid;
                 service.CommentReceived?.Invoke(this, new CommentEvent
                 {
                     Comment = text,
