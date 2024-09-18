@@ -22,7 +22,7 @@
                 <ColumnDefinition></ColumnDefinition>
                 <ColumnDefinition Width="30"></ColumnDefinition>
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Row="0" Grid.Column="0" x:Name="UrlTextBox"/>
+            <TextBox Grid.Row="0" Grid.Column="0" x:Name="UrlTextBox" Text="{Binding Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
             <Button Grid.Row="0" Grid.Column="1" Content="OK" Click="Button_Click"></Button>
         </Grid>
 

@@ -4,6 +4,7 @@ using LiteDB;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -26,7 +27,6 @@ namespace Youtube_Live_Chat_Reformat
     public partial class MainWindow : Window
     {
         private YoutubeService _youtubeService;
-        private string Url;
         public string liteDBString;
         private Counter Counter;
         private WebSocket WebSocket;
@@ -48,6 +48,7 @@ namespace Youtube_Live_Chat_Reformat
                 _ = Directory.CreateDirectory("Temp");
             }
             _ = Cef.Initialize(settings);
+            DataContext = new MainWindowContext();
             InitializeComponent();
         }
 
@@ -76,17 +77,13 @@ namespace Youtube_Live_Chat_Reformat
         }
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            _youtubeService?.Dispose();
-            Url = UrlTextBox.Text;
             FilterPanel.Visibility = Visibility.Visible;
             try
             {
-                Uri uri = new Uri(Url);
+                Uri uri = new Uri(((MainWindowContext)DataContext).Url);
                 NameValueCollection query = HttpUtility.ParseQueryString(uri.Query);
-                _youtubeService = new YoutubeService();
                 liteDBString = "Filename=Temp\\" + query.Get("v") + ";Connection=shared; journal=false";
-                _youtubeService.CommentReceived += _youtubeService_CommentReceived;
-                _youtubeService.InitChromium(Url, browser);
+                _youtubeService.LoadChat(((MainWindowContext)DataContext).Url);
                 if (Counter != null)
                 {
                     Counter.Reset();
@@ -146,6 +143,17 @@ namespace Youtube_Live_Chat_Reformat
             }
         }
 
+        private void _youtubeService_YoutubeChatFound(object sender, string e)
+        {
+            Uri uri = new Uri(e);
+            NameValueCollection query = HttpUtility.ParseQueryString(uri.Query);
+            liteDBString = "Filename=Temp\\" + query.Get("v") + ";Connection=shared; journal=false";
+            Dispatcher.Invoke(() =>
+            {
+                ((MainWindowContext)DataContext).Url = "https://studio.youtube.com/live_chat?is_popout=1&v=" + query.Get("v");
+            });
+        }
+
         private void FilterWindow(object sender, RoutedEventArgs e)
         {
             if(Counter != null)
@@ -169,7 +177,14 @@ namespace Youtube_Live_Chat_Reformat
             {
                 return;
             }
-
+            if (File.Exists("debug.txt"))
+            {
+                browser.ShowDevTools();
+            }
+            _youtubeService = new YoutubeService();
+            _youtubeService.InitChromium(browser);
+            _youtubeService.YoutubeChatFound += _youtubeService_YoutubeChatFound;
+            _youtubeService.CommentReceived += _youtubeService_CommentReceived;
             // Create a listener.
             HttpListener listener = new HttpListener();
             listener.Prefixes.Add("http://localhost:16470/");
@@ -253,6 +268,24 @@ namespace Youtube_Live_Chat_Reformat
             t.IsBackground = true;
             t.Start();
         }
-        
+    }
+
+    public class MainWindowContext: INotifyPropertyChanged
+    {
+        private string url;
+        public string Url
+        {
+            get
+            {
+                return url;
+            }
+            set
+            {
+                url = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("url"));
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
     }
 }
