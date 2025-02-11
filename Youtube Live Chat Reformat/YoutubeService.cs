@@ -56,12 +56,16 @@ namespace Youtube_Live_Chat_Reformat
                     e.Frame.ExecuteJavaScriptAsync("Array.prototype.slice.call(document.getElementsByTagName(\"yt-live-chat-message-input-renderer\")).forEach((x) => x.remove())");
 
                     e.Frame.ExecuteJavaScriptAsync(@"
-                var last = """";
-                (async function() { await CefSharp.BindObjectAsync('boundAsync', 'bound'); })();
+                let last = """";
+                let txtLogging = null;
+                let scLogging = null;
+                let memLogging = null;
+                let sponsorLogging = null;
+                (async () => { await CefSharp.BindObjectAsync('boundAsync', 'bound'); })()
                 if(!txtLogging)
                 {
                     (async function () {
-                        setInterval(function () {
+                        txtLogging = setInterval(function () {
                             (function (t) {
                                 if(t.length <= 0){
                                    return;
@@ -77,11 +81,10 @@ namespace Youtube_Live_Chat_Reformat
                         }, 25);
                     })()
                 }
-                var txtLogging = true;
                 if(!scLogging)
                 {
                     (async function () {
-                        setInterval(function () {
+                        scLogging = setInterval(function () {
                             (function (t) {
                                 if(t.length <= 0){
                                    return;
@@ -99,11 +102,10 @@ namespace Youtube_Live_Chat_Reformat
                         }, 100);
                     })();
                 }
-                var scLogging = true;
                 if(!memLogging)
                 {
                     (async function () {
-                        setInterval(function () {
+                        memLogging = setInterval(function () {
                             (function (t) {
                                 if(t.length <= 0){
                                    return;
@@ -119,12 +121,10 @@ namespace Youtube_Live_Chat_Reformat
                         }, 100);
                     })()
                 }
-                var memLogging = true;
                 if(!sponsorLogging)
                 {
                     (async function () {
-                        await CefSharp.BindObjectAsync('boundAsync', 'bound');
-                        setInterval(function () {
+                        sponsorLogging = setInterval(function () {
                             (function (t) {
                                 if(t.length <= 0){
                                    return;
@@ -140,7 +140,6 @@ namespace Youtube_Live_Chat_Reformat
                         }, 100);
                     })()
                 }
-                var sponsorLogging = true;
                 ");
                     if (File.Exists("Assets\\style.css"))
                     {
