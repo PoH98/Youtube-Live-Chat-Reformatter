@@ -1,28 +1,43 @@
-﻿using CefSharp;
-using CefSharp.Wpf;
+﻿using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 using System;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Web;
 
 namespace Youtube_Live_Chat_Reformat
 {
     internal class YoutubeService : IDisposable
     {
-        private ChromiumWebBrowser browser;
+        private WebView2 browser;
         private string webPath;
+
         internal event EventHandler<CommentEvent> CommentReceived;
         internal event EventHandler<string> YoutubeChatFound;
+
         internal YoutubeService() { }
 
-        internal void InitChromium(ChromiumWebBrowser browser)
+        internal void InitWebView2(WebView2 browser)
         {
             this.browser = browser;
-            browser.Load("https://accounts.google.com/v3/signin/identifier?continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Dzh-CN%26next%3D%252F&hl=zh-CN&service=youtube&flowName=GlifWebSignIn&flowEntry=ServiceLogin&ddm=1");
-            browser.JavascriptObjectRepository.Register("bound", new CefObject(this), true);
-            browser.FrameLoadEnd += Browser_FrameLoadEnd;
+
+            // Ensure CoreWebView2 is initialized before binding events
+            if (browser.CoreWebView2 != null)
+            {
+                AttachEvents();
+            }
+
+            browser.Source = new Uri("https://accounts.google.com/v3/signin/identifier?continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Dzh-CN%26next%3D%252F&hl=zh-CN&service=youtube&flowName=GlifWebSignIn&flowEntry=ServiceLogin&ddm=1");
             Console.WriteLine("Inited Youtube Services");
+        }
+
+        private void AttachEvents()
+        {
+            browser.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
+            browser.CoreWebView2.FrameNavigationStarting += CoreWebView2_FrameNavigationStarting;
+            browser.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
         }
 
         internal void LoadChat(string youtubeUrl)
@@ -34,178 +49,236 @@ namespace Youtube_Live_Chat_Reformat
             {
                 id = uri.Segments.Last();
             }
-            browser.Load("https://studio.youtube.com/live_chat?is_popout=1&v=" + id);
+
+            string targetUrl = "https://studio.youtube.com/live_chat?is_popout=1&v=" + id;
+            if (browser.CoreWebView2 != null)
+            {
+                browser.CoreWebView2.Navigate(targetUrl);
+            }
+            else
+            {
+                browser.Source = new Uri(targetUrl);
+            }
+
             Console.WriteLine("Current stream YT url is " + youtubeUrl);
         }
 
-        private void Browser_FrameLoadEnd(object sender, FrameLoadEndEventArgs e)
+        private void CoreWebView2_FrameNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
+            string frameUrl = e.Uri;
+
             try
             {
-                if (webPath == null && e.Frame.Url.Split('=')[0] == "https://www.youtube.com/live_chat?continuation")
+                CoreWebView2 coreWebView2 = (CoreWebView2)sender;
+                if (webPath == null && frameUrl.StartsWith("https://www.youtube.com/live_chat?continuation"))
                 {
-                    YoutubeChatFound?.Invoke(this, e.Browser.MainFrame.Url);
-                    browser.Load(webPath = e.Frame.Url);
-                }
-                else if (e.Frame.Url == webPath || e.Frame.Url.StartsWith("https://studio.youtube.com/live_chat") || e.Frame.Url.StartsWith("https://www.youtube.com/live_chat"))
-                {
-                    e.Frame.ExecuteJavaScriptAsync("document.getElementById(\"reaction-control-panel-overlay\").remove();");
-                    e.Frame.ExecuteJavaScriptAsync("document.getElementById(\"chat\").style.background = \"#00FF00\";");
-                    e.Frame.ExecuteJavaScriptAsync("Array.prototype.slice.call(document.getElementsByTagName(\"yt-live-chat-viewer-engagement-message-renderer\")).forEach((x) => x.remove())");
-                    e.Frame.ExecuteJavaScriptAsync("Array.prototype.slice.call(document.getElementsByTagName(\"yt-live-chat-header-renderer\")).forEach((x) => x.remove())");
-                    e.Frame.ExecuteJavaScriptAsync("Array.prototype.slice.call(document.getElementsByTagName(\"yt-live-chat-message-input-renderer\")).forEach((x) => x.remove())");
+                    webPath = frameUrl;
 
-                    e.Frame.ExecuteJavaScriptAsync(@"
-                let last = """";
-                let txtLogging = null;
-                let scLogging = null;
-                let memLogging = null;
-                let sponsorLogging = null;
-                (async () => { await CefSharp.BindObjectAsync('boundAsync', 'bound'); })()
-                if(!txtLogging)
-                {
-                    (async function () {
-                        txtLogging = setInterval(function () {
-                            (function (t) {
-                                if(t.length <= 0){
-                                   return;
-                                }
-                                if (last != (cid = t[t.length - 1].id))
-                                    for (var e = t.length; e--;) {
-                                        if (last == t[e].id) return last = cid;
-                                        bound.onText(cid, t[e].children[1].children[1].children[1].textContent, t[e].children[1].children[3].textContent, t[e].outerHTML);
-                                        last = cid;
-                                        return;
-                                    }
-                            })(document.getElementsByTagName(""yt-live-chat-text-message-renderer""))
-                        }, 25);
-                    })()
-                }
-                if(!scLogging)
-                {
-                    (async function () {
-                        scLogging = setInterval(function () {
-                            (function (t) {
-                                if(t.length <= 0){
-                                   return;
-                                }
-                                if (last != (cid = t[t.length - 1].id))
-                                    for (var e = t.length; e--;) {
-                                        if (last == t[e].id) return last = cid;
-                                        let userName = t[e].querySelectorAll(""#author-name"")[0].textContent;
-                                        let amount = parseFloat(t[e].querySelectorAll(""#purchase-amount-column"")[0].textContent.replace(/[^0-9\.]+/g,""""))
-                                        amount && bound.onSuperChat(cid, userName, t[e].children[0].children[1].children[0].textContent, amount, t[e].outerHTML);
-                                        last = cid;
-                                        return;
-                                    }
-                            })(document.getElementsByTagName(""yt-live-chat-paid-message-renderer""))
-                        }, 100);
-                    })();
-                }
-                if(!memLogging)
-                {
-                    (async function () {
-                        memLogging = setInterval(function () {
-                            (function (t) {
-                                if(t.length <= 0){
-                                   return;
-                                }
-                                if (last != (cid = t[t.length - 1].id))
-                                    for (var e = t.length; e--;) {
-                                        if (last == t[e].id) return last = cid;
-                                        bound.onText(cid, t[e].children[0].children[0].children[1].textContent, t[e].children[0].children[1].textContent, t[e].outerHTML);
-                                        last = cid;
-                                        return;
-                                    }
-                            })(document.getElementsByTagName(""yt-live-chat-membership-item-renderer""))
-                        }, 100);
-                    })()
-                }
-                if(!sponsorLogging)
-                {
-                    (async function () {
-                        sponsorLogging = setInterval(function () {
-                            (function (t) {
-                                if(t.length <= 0){
-                                   return;
-                                }
-                                if (last != (cid = t[t.length - 1].id))
-                                    for (var e = t.length; e--;) {
-                                        if (last == t[e].id) return last = cid;
-                                        bound.onText(cid, t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[0].textContent, t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[2].textContent, t[e].outerHTML);
-                                        last = cid;
-                                        return;
-                                    }
-                            })(document.getElementsByTagName(""ytd-sponsorships-live-chat-gift-purchase-announcement-renderer""))
-                        }, 100);
-                    })()
-                }
-                ");
-                    if (File.Exists("Assets\\style.css"))
-                    {
-                        e.Frame.ExecuteJavaScriptAsync(@"
-                        let escapeHTMLPolicy = trustedTypes.createPolicy(""forceInner"", {
-                            createHTML: (to_escape) => to_escape
-                        })
-                        const style = document.createElement('style');
-                        style.id = 'custom-obs';
-                        style.innerHTML = escapeHTMLPolicy.createHTML(`" + File.ReadAllText("Assets\\style.css") + @"`);
-                        document.head.appendChild(style);");
-                    }
-                }
+                    YoutubeChatFound?.Invoke(this, coreWebView2.Source);
 
+                    browser.CoreWebView2.Navigate(webPath);
+                }
             }
             catch
             {
+                // Ignored
+            }
+        }
 
+        private async void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (!e.IsSuccess) return;
+
+            string currentUrl = browser.CoreWebView2.Source;
+
+            try
+            {
+                if (currentUrl == webPath || currentUrl.StartsWith("https://studio.youtube.com/live_chat") || currentUrl.StartsWith("https://www.youtube.com/live_chat"))
+                {
+                    // Clean up unwanted DOM elements
+                    await browser.CoreWebView2.ExecuteScriptAsync("document.getElementById('reaction-control-panel-overlay')?.remove();");
+                    await browser.CoreWebView2.ExecuteScriptAsync("document.getElementById('chat').style.background = '#00FF00';");
+                    await browser.CoreWebView2.ExecuteScriptAsync("Array.from(document.getElementsByTagName('yt-live-chat-viewer-engagement-message-renderer')).forEach(x => x.remove());");
+                    await browser.CoreWebView2.ExecuteScriptAsync("Array.from(document.getElementsByTagName('yt-live-chat-header-renderer')).forEach(x => x.remove());");
+                    await browser.CoreWebView2.ExecuteScriptAsync("Array.from(document.getElementsByTagName('yt-live-chat-message-input-renderer')).forEach(x => x.remove());");
+
+                    // Inject chat listening scripts using WebView2's window.chrome.webview.postMessage
+                    await browser.CoreWebView2.ExecuteScriptAsync(@"
+                        let last = '';
+                        let txtLogging = null;
+                        let scLogging = null;
+                        let memLogging = null;
+                        let sponsorLogging = null;
+
+                        if(!txtLogging) {
+                            txtLogging = setInterval(function () {
+                                (function (t) {
+                                    if(t.length <= 0) return;
+                                    if (last != (cid = t[t.length - 1].id)) {
+                                        for (var e = t.length; e--;) {
+                                            if (last == t[e].id) return last = cid;
+                                            window.chrome.webview.postMessage({
+                                                type: 'text',
+                                                cid: cid,
+                                                name: t[e].children[1].children[1].children[1].textContent,
+                                                text: t[e].children[1].children[3].textContent,
+                                                html: t[e].outerHTML
+                                            });
+                                            last = cid;
+                                            return;
+                                        }
+                                    }
+                                })(document.getElementsByTagName('yt-live-chat-text-message-renderer'));
+                            }, 25);
+                        }
+
+                        if(!scLogging) {
+                            scLogging = setInterval(function () {
+                                (function (t) {
+                                    if(t.length <= 0) return;
+                                    if (last != (cid = t[t.length - 1].id)) {
+                                        for (var e = t.length; e--;) {
+                                            if (last == t[e].id) return last = cid;
+                                            let userName = t[e].querySelectorAll('#author-name')[0].textContent;
+                                            let amount = parseFloat(t[e].querySelectorAll('#purchase-amount-column')[0].textContent.replace(/[^0-9\.]+/g,''));
+                                            if(amount) {
+                                                window.chrome.webview.postMessage({
+                                                    type: 'superchat',
+                                                    cid: cid,
+                                                    name: userName,
+                                                    text: t[e].children[0].children[1].children[0].textContent,
+                                                    amount: amount,
+                                                    html: t[e].outerHTML
+                                                });
+                                            }
+                                            last = cid;
+                                            return;
+                                        }
+                                    }
+                                })(document.getElementsByTagName('yt-live-chat-paid-message-renderer'));
+                            }, 100);
+                        }
+
+                        if(!memLogging) {
+                            memLogging = setInterval(function () {
+                                (function (t) {
+                                    if(t.length <= 0) return;
+                                    if (last != (cid = t[t.length - 1].id)) {
+                                        for (var e = t.length; e--;) {
+                                            if (last == t[e].id) return last = cid;
+                                            window.chrome.webview.postMessage({
+                                                type: 'text',
+                                                cid: cid,
+                                                name: t[e].children[0].children[0].children[1].textContent,
+                                                text: t[e].children[0].children[1].textContent,
+                                                html: t[e].outerHTML
+                                            });
+                                            last = cid;
+                                            return;
+                                        }
+                                    }
+                                })(document.getElementsByTagName('yt-live-chat-membership-item-renderer'));
+                            }, 100);
+                        }
+
+                        if(!sponsorLogging) {
+                            sponsorLogging = setInterval(function () {
+                                (function (t) {
+                                    if(t.length <= 0) return;
+                                    if (last != (cid = t[t.length - 1].id)) {
+                                        for (var e = t.length; e--;) {
+                                            if (last == t[e].id) return last = cid;
+                                            window.chrome.webview.postMessage({
+                                                type: 'text',
+                                                cid: cid,
+                                                name: t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[0].textContent,
+                                                text: t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[2].textContent,
+                                                html: t[e].outerHTML
+                                            });
+                                            last = cid;
+                                            return;
+                                        }
+                                    }
+                                })(document.getElementsByTagName('ytd-sponsorships-live-chat-gift-purchase-announcement-renderer'));
+                            }, 100);
+                        }
+                    ");
+
+                    if (File.Exists("Assets\\style.css"))
+                    {
+                        string cssContent = File.ReadAllText("Assets\\style.css").Replace("`", "\\`");
+                        await browser.CoreWebView2.ExecuteScriptAsync($@"
+                            let escapeHTMLPolicy = trustedTypes.createPolicy('forceInner', {{
+                                createHTML: (to_escape) => to_escape
+                            }});
+                            const style = document.createElement('style');
+                            style.id = 'custom-obs';
+                            style.innerHTML = escapeHTMLPolicy.createHTML(`{cssContent}`);
+                            document.head.appendChild(style);
+                        ");
+                    }
+                }
+            }
+            catch
+            {
+                // Ignored
+            }
+        }
+
+        private string lastId;
+
+        private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                using JsonDocument json = JsonDocument.Parse(e.WebMessageAsJson);
+                JsonElement root = json.RootElement;
+
+                string type = root.GetProperty("type").GetString();
+                string cid = root.GetProperty("cid").GetString();
+
+                if (lastId == cid) return;
+                lastId = cid;
+
+                string name = root.GetProperty("name").GetString();
+                string text = root.GetProperty("text").GetString();
+                string html = root.GetProperty("html").GetString();
+
+                if (type == "text")
+                {
+                    CommentReceived?.Invoke(this, new CommentEvent
+                    {
+                        Comment = text,
+                        User = name,
+                        Html = html
+                    });
+                }
+                else if (type == "superchat")
+                {
+                    double amount = root.GetProperty("amount").GetDouble();
+                    CommentReceived?.Invoke(this, new CommentEvent
+                    {
+                        Comment = text,
+                        User = name,
+                        SuperChat = true,
+                        SuperChatAmount = amount,
+                        Html = html
+                    });
+                }
+            }
+            catch
+            {
+                // Ignored
             }
         }
 
         public void Dispose()
         {
-            browser.JavascriptObjectRepository.UnRegisterAll();
-            browser.FrameLoadEnd -= Browser_FrameLoadEnd;
-        }
-
-        private class CefObject
-        {
-            private readonly YoutubeService service;
-            private string lastId;
-            public CefObject(YoutubeService service)
+            if (browser?.CoreWebView2 != null)
             {
-                this.service = service;
-            }
-
-            public void onText(string cid, string name, string text, string html)
-            {
-                if(lastId == cid)
-                {
-                    return;
-                }
-                lastId = cid;
-                service.CommentReceived?.Invoke(this, new CommentEvent
-                {
-                    Comment = text,
-                    User = name,
-                    Html = html
-                });
-            }
-
-            public void onSuperChat(string cid, string name, string text, double scAmount, string html)
-            {
-                if (lastId == cid)
-                {
-                    return;
-                }
-                lastId = cid;
-                service.CommentReceived?.Invoke(this, new CommentEvent
-                {
-                    Comment = text,
-                    User = name,
-                    SuperChat = true,
-                    SuperChatAmount = scAmount,
-                    Html = html
-                });
+                browser.CoreWebView2.NavigationCompleted -= CoreWebView2_NavigationCompleted;
+                browser.CoreWebView2.FrameNavigationStarting -= CoreWebView2_FrameNavigationStarting;
+                browser.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
             }
         }
 

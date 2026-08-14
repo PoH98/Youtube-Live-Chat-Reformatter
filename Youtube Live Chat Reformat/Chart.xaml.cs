@@ -61,7 +61,7 @@ namespace Youtube_Live_Chat_Reformat
                         {
                             list.Add(new LineSeries<int>
                             {
-                                Values = data.Select(x => x.Count),
+                                Values = data.Select(x => x.Count).ToArray(),
                                 Fill = null
                             });
                         }

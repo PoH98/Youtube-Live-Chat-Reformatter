@@ -19,6 +19,10 @@ body {
     font-weight: 400;
 }
 
+yt-live-chat-app{
+    pointer-events: none;
+}
+
 yt-live-chat-renderer {
     --message-margin: 4px;
     --scale-point: 1;

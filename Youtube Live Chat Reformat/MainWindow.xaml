@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Youtube_Live_Chat_Reformat"
-        xmlns:cefSharp="clr-namespace:CefSharp.Wpf;assembly=CefSharp.Wpf"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         mc:Ignorable="d"
         Loaded="Window_Loaded"
         Title="MainWindow" Height="800" Width="400" Background="Lime">
@@ -17,28 +17,19 @@
             <RowDefinition></RowDefinition>
             <RowDefinition Height="auto"></RowDefinition>
         </Grid.RowDefinitions>
+
         <Grid Grid.Row="0" Grid.Column="0" Height="30">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="60"></ColumnDefinition>
                 <ColumnDefinition></ColumnDefinition>
                 <ColumnDefinition Width="30"></ColumnDefinition>
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Row="0" Grid.Column="0" x:Name="UrlTextBox" Text="{Binding Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-            <Button Grid.Row="0" Grid.Column="1" Content="OK" Click="Button_Click"></Button>
+            <Button Grid.Row="0" Grid.Column="0" Content="Filter" Click="FilterWindow"></Button>
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="UrlTextBox" Text="{Binding Url, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+            <Button Grid.Row="0" Grid.Column="2" Content="OK" Click="Button_Click"></Button>
         </Grid>
 
-        <cefSharp:ChromiumWebBrowser Grid.Row="1"
-        Address="https://live.youtube.chat/index.html" x:Name="browser" />
-        <Border Grid.Row="2" Background="Lime" VerticalAlignment="Top" 
-                Height="2"  Visibility="Hidden" x:Name="FilterPanel"
-                MouseEnter="StackPanel_MouseEnter" MouseLeave="StackPanel_MouseLeave">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition></ColumnDefinition>
-                </Grid.ColumnDefinitions>
-                <Button Grid.Row="0" Grid.Column="0" Content="Filter" Click="FilterWindow">
-
-                </Button>
-            </Grid>
-        </Border>
+        <!-- WebView2 Control -->
+        <wv2:WebView2 Grid.Row="1" x:Name="browser" />
     </Grid>
 </Window>

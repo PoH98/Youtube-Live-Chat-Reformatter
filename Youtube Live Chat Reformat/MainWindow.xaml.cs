@@ -1,6 +1,6 @@
-﻿using CefSharp;
-using CefSharp.Wpf;
-using LiteDB;
+﻿using LiteDB;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -10,14 +10,15 @@ using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Web;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
-
 
 namespace Youtube_Live_Chat_Reformat
 {
@@ -31,23 +32,11 @@ namespace Youtube_Live_Chat_Reformat
         private Counter Counter;
         private WebSocket WebSocket;
         private ILiteCollection<ChatData> collection;
+
+        private ResourceHandlerService resourceHandler;
+
         public MainWindow()
         {
-            CefSettings settings = new CefSettings
-            {
-                CachePath = Path.GetFullPath("cache"),
-            };
-            settings.RegisterScheme(new CefCustomScheme
-            {
-                SchemeName = "https",
-                DomainName = "live.youtube.chat",
-                SchemeHandlerFactory = new ResourceHandlerService()
-            });
-            if (!Directory.Exists("Temp"))
-            {
-                _ = Directory.CreateDirectory("Temp");
-            }
-            _ = Cef.Initialize(settings);
             DataContext = new MainWindowContext();
             InitializeComponent();
         }
@@ -56,7 +45,6 @@ namespace Youtube_Live_Chat_Reformat
         {
             Border sp = sender as Border;
             DoubleAnimation db = new DoubleAnimation();
-            //db.From = 12;
             db.To = 30;
             db.Duration = TimeSpan.FromSeconds(0.2);
             db.AutoReverse = false;
@@ -68,18 +56,21 @@ namespace Youtube_Live_Chat_Reformat
         {
             Border sp = sender as Border;
             DoubleAnimation db = new DoubleAnimation();
-            //db.From = 12;
             db.To = 1;
             db.Duration = TimeSpan.FromSeconds(0.2);
             db.AutoReverse = false;
             db.RepeatBehavior = new RepeatBehavior(1);
             sp.BeginAnimation(StackPanel.HeightProperty, db);
         }
+
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            FilterPanel.Visibility = Visibility.Visible;
             try
             {
+                if (!Directory.Exists("Temp"))
+                {
+                    _ = Directory.CreateDirectory("Temp");
+                }
                 Uri uri = new Uri(((MainWindowContext)DataContext).Url);
                 NameValueCollection query = HttpUtility.ParseQueryString(uri.Query);
                 liteDBString = "Filename=Temp\\" + query.Get("v") + ";Connection=shared; journal=false";
@@ -98,7 +89,7 @@ namespace Youtube_Live_Chat_Reformat
 
         private async void _youtubeService_CommentReceived(object sender, YoutubeService.CommentEvent e)
         {
-            if(collection == null)
+            if (collection == null)
             {
                 LiteDatabase _liteDatabase = new LiteDatabase(liteDBString);
                 collection = _liteDatabase.GetCollection<ChatData>("chat");
@@ -156,7 +147,7 @@ namespace Youtube_Live_Chat_Reformat
 
         private void FilterWindow(object sender, RoutedEventArgs e)
         {
-            if(Counter != null)
+            if (Counter != null)
             {
                 return;
             }
@@ -171,39 +162,56 @@ namespace Youtube_Live_Chat_Reformat
             Counter = null;
         }
 
-        private void Window_Loaded(object sender, RoutedEventArgs e)
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            string cacheFolderPath = Path.GetFullPath("cache");
+            var env = await CoreWebView2Environment.CreateAsync(null, cacheFolderPath);
+            resourceHandler = new ResourceHandlerService(env);
+
+            await browser.EnsureCoreWebView2Async(env);
+            resourceHandler.Register(browser.CoreWebView2);
+
+            if (File.Exists("debug.txt"))
+            {
+                browser.CoreWebView2.OpenDevToolsWindow();
+            }
+
             if (!HttpListener.IsSupported)
             {
                 return;
             }
-            if (File.Exists("debug.txt"))
-            {
-                browser.ShowDevTools();
-            }
+
             _youtubeService = new YoutubeService();
-            _youtubeService.InitChromium(browser);
+            _youtubeService.InitWebView2(browser);
             _youtubeService.YoutubeChatFound += _youtubeService_YoutubeChatFound;
             _youtubeService.CommentReceived += _youtubeService_CommentReceived;
-            // Create a listener.
+
+            // Create HttpListener
             HttpListener listener = new HttpListener();
             listener.Prefixes.Add("http://localhost:16470/");
             listener.Start();
+
             Thread t = new Thread(() =>
             {
                 while (true)
                 {
-                    // Note: The GetContext method blocks while waiting for a request.
                     HttpListenerContext context = listener.GetContext();
                     Thread exec = new Thread(async () =>
                     {
                         HttpListenerRequest request = context.Request;
                         if (request.Url.Segments.Length == 1)
                         {
-                            // Obtain a response object.
                             HttpListenerResponse response = context.Response;
-                            // Construct a response.
-                            string responseString = await browser.GetBrowser().MainFrame.GetSourceAsync();
+
+                            // WebView2 ExecuteScriptAsync must run on the UI thread
+                            string rawJsonHtml = await Dispatcher.InvokeAsync(async () =>
+                            {
+                                return await browser.ExecuteScriptAsync("document.documentElement.outerHTML");
+                            }).Task.Unwrap();
+
+                            // Deserialize JSON string output from ExecuteScriptAsync
+                            string responseString = System.Text.Json.JsonSerializer.Deserialize<string>(rawJsonHtml);
+
                             responseString = Regex.Replace(responseString, "<script.*?>.*?</script>", "", RegexOptions.IgnoreCase);
                             var bodyIndex = responseString.IndexOf("</body>");
                             var injector = File.ReadAllText("Assets\\inject.js");
@@ -222,23 +230,20 @@ namespace Youtube_Live_Chat_Reformat
     setInterval(()=>{
       el.scrollTo(0, el.scrollHeight);
     }, 100);
-    "+ injector +@"
+    " + injector + @"
 </script>");
                             byte[] buffer = Encoding.UTF8.GetBytes(responseString);
-                            // Get a response stream and write the response to it.
                             response.ContentLength64 = buffer.Length;
                             response.ContentEncoding = Encoding.UTF8;
                             response.ContentType = "text/html; charset=utf-8";
                             Stream output = response.OutputStream;
                             output.Write(buffer, 0, buffer.Length);
-                            // You must close the output stream.
                             output.Close();
                         }
                         else if (request.Url.Segments.Contains("socks"))
                         {
-                            WebSocketContext webSocketContext = null;
-                            webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
-                            if(WebSocket != null)
+                            WebSocketContext webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
+                            if (WebSocket != null)
                             {
                                 try
                                 {
@@ -262,7 +267,6 @@ namespace Youtube_Live_Chat_Reformat
                         }
                     });
                     exec.Start();
-
                 }
             });
             t.IsBackground = true;
@@ -270,19 +274,16 @@ namespace Youtube_Live_Chat_Reformat
         }
     }
 
-    public class MainWindowContext: INotifyPropertyChanged
+    public class MainWindowContext : INotifyPropertyChanged
     {
         private string url;
         public string Url
         {
-            get
-            {
-                return url;
-            }
+            get => url;
             set
             {
                 url = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("url"));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Url"));
             }
         }
 
