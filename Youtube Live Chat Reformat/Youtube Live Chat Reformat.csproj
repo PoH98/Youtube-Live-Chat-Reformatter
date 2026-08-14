@@ -153,6 +153,11 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Costura.Fody">
+      <Version>6.2.0</Version>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="LiteDB">
       <Version>5.0.21</Version>
     </PackageReference>
@@ -178,7 +183,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties Reactor_Output="&lt;AssemblyLocation&gt;\&lt;AssemblyFileName&gt;" Reactor_Configuration="Release" Reactor_Project="" Reactor_Commands="" Reactor_Deploy="0" Reactor_Enabled="0" />
+      <UserProperties Reactor_Enabled="0" Reactor_Deploy="0" Reactor_Commands="" Reactor_Project="" Reactor_Configuration="Release" Reactor_Output="&lt;AssemblyLocation&gt;\&lt;AssemblyFileName&gt;" />
     </VisualStudio>
   </ProjectExtensions>
 </Project>
