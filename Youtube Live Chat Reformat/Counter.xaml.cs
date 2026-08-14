@@ -3,9 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Reflection.Emit;
 using System.Threading;
-using System.Timers;
 using System.Windows;
 
 namespace Youtube_Live_Chat_Reformat
@@ -21,6 +19,7 @@ namespace Youtube_Live_Chat_Reformat
         private List<Chart> charts = new List<Chart>();
         private readonly Thread t;
         private readonly List<ChatData> chatDatas = new List<ChatData>();
+        private readonly object _chatLock = new object();
         public Counter(MainWindow mainWindow)
         {
             window = mainWindow;
@@ -46,7 +45,10 @@ namespace Youtube_Live_Chat_Reformat
 
         internal void AddMessage(ChatData message)
         {
-            chatDatas.Add(message);
+            lock (_chatLock)
+            {
+                chatDatas.Add(message);
+            }
         }
 
         internal void Reset()
@@ -61,10 +63,16 @@ namespace Youtube_Live_Chat_Reformat
         {
             if (pause)
             {
+                Thread.Sleep(200);
                 return;
             }
             counters = new List<CounterData>();
-            IQueryable<ChatData> list = chatDatas.AsQueryable().Where(x => x.Comment != null && x.User != null);
+            List<ChatData> snapshot;
+            lock (_chatLock)
+            {
+                snapshot = chatDatas.ToList();
+            }
+            IQueryable<ChatData> list = snapshot.AsQueryable().Where(x => x.Comment != null && x.User != null);
             List<string> filters = new List<string>();
             Dispatcher.Invoke(() =>
             {
@@ -89,6 +97,9 @@ namespace Youtube_Live_Chat_Reformat
                             {
                                 goto Label;
                             }
+                            var cache = max;
+                            max = Math.Max(cache, min);
+                            min = Math.Min(cache, min);
                             numFilters.AddRange(Enumerable.Range(min, max - min + 1));
                             continue;
                         }
@@ -174,7 +185,13 @@ namespace Youtube_Live_Chat_Reformat
 
                 }
             });
-            foreach (var chart in charts)
+
+            List<Chart> chartsSnapshot;
+            lock (charts)
+            {
+                chartsSnapshot = charts.ToList();
+            }
+            foreach (var chart in chartsSnapshot)
             {
                 chart.UpdateChart(counters);
             }

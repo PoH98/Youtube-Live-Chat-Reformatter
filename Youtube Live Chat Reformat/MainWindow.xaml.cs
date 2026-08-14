@@ -10,7 +10,6 @@ using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,7 +31,7 @@ namespace Youtube_Live_Chat_Reformat
         private Counter Counter;
         private WebSocket WebSocket;
         private ILiteCollection<ChatData> collection;
-
+        private readonly SemaphoreSlim _webSocketLock = new SemaphoreSlim(1, 1);
         private ResourceHandlerService resourceHandler;
 
         public MainWindow()
@@ -91,6 +90,8 @@ namespace Youtube_Live_Chat_Reformat
         {
             if (collection == null)
             {
+                if (string.IsNullOrEmpty(liteDBString)) return;
+
                 LiteDatabase _liteDatabase = new LiteDatabase(liteDBString);
                 collection = _liteDatabase.GetCollection<ChatData>("chat");
             }
@@ -100,8 +101,10 @@ namespace Youtube_Live_Chat_Reformat
                 ChatData last = list.Count() > 0 ? list.Last() : new ChatData();
                 if (!(last.User == e.User && last.Comment == e.Comment))
                 {
-                    if (WebSocket != null)
+                    if (WebSocket != null && WebSocket.State == WebSocketState.Open)
                     {
+                        await _webSocketLock.WaitAsync();
+
                         try
                         {
                             var data = Encoding.UTF8.GetBytes(e.Html);
@@ -110,6 +113,10 @@ namespace Youtube_Live_Chat_Reformat
                         catch (WebSocketException)
                         {
                             WebSocket = null;
+                        }
+                        finally
+                        {
+                            _webSocketLock.Release();
                         }
                     }
                     if (!string.IsNullOrEmpty(e.Comment))
@@ -187,35 +194,38 @@ namespace Youtube_Live_Chat_Reformat
             _youtubeService.CommentReceived += _youtubeService_CommentReceived;
 
             // Create HttpListener
-            HttpListener listener = new HttpListener();
-            listener.Prefixes.Add("http://localhost:16470/");
-            listener.Start();
-
-            Thread t = new Thread(() =>
+            try
             {
-                while (true)
+                HttpListener listener = new HttpListener();
+                listener.Prefixes.Add("http://localhost:16470/");
+                listener.Start();
+                Thread t = new Thread(() =>
                 {
-                    HttpListenerContext context = listener.GetContext();
-                    Thread exec = new Thread(async () =>
+                    while (true)
                     {
-                        HttpListenerRequest request = context.Request;
-                        if (request.Url.Segments.Length == 1)
+                        try
                         {
-                            HttpListenerResponse response = context.Response;
-
-                            // WebView2 ExecuteScriptAsync must run on the UI thread
-                            string rawJsonHtml = await Dispatcher.InvokeAsync(async () =>
+                            HttpListenerContext context = listener.GetContext();
+                            Thread exec = new Thread(async () =>
                             {
-                                return await browser.ExecuteScriptAsync("document.documentElement.outerHTML");
-                            }).Task.Unwrap();
+                                HttpListenerRequest request = context.Request;
+                                if (request.Url.Segments.Length == 1)
+                                {
+                                    HttpListenerResponse response = context.Response;
 
-                            // Deserialize JSON string output from ExecuteScriptAsync
-                            string responseString = System.Text.Json.JsonSerializer.Deserialize<string>(rawJsonHtml);
+                                    // WebView2 ExecuteScriptAsync must run on the UI thread
+                                    string rawJsonHtml = await Dispatcher.InvokeAsync(async () =>
+                                    {
+                                        return await browser.ExecuteScriptAsync("document.documentElement.outerHTML");
+                                    }).Task.Unwrap();
 
-                            responseString = Regex.Replace(responseString, "<script.*?>.*?</script>", "", RegexOptions.IgnoreCase);
-                            var bodyIndex = responseString.IndexOf("</body>");
-                            var injector = File.ReadAllText("Assets\\inject.js");
-                            responseString = responseString.Insert(bodyIndex, @"
+                                    // Deserialize JSON string output from ExecuteScriptAsync
+                                    string responseString = System.Text.Json.JsonSerializer.Deserialize<string>(rawJsonHtml);
+
+                                    responseString = Regex.Replace(responseString, "<script.*?>.*?</script>", "", RegexOptions.IgnoreCase);
+                                    var bodyIndex = responseString.IndexOf("</body>");
+                                    var injector = File.ReadAllText("Assets\\inject.js");
+                                    responseString = responseString.Insert(bodyIndex, @"
 <script>
    document.getElementById('item-offset').style.height = 'auto';
    document.getElementById('item-offset').style.minHeight = '100%';
@@ -232,45 +242,55 @@ namespace Youtube_Live_Chat_Reformat
     }, 100);
     " + injector + @"
 </script>");
-                            byte[] buffer = Encoding.UTF8.GetBytes(responseString);
-                            response.ContentLength64 = buffer.Length;
-                            response.ContentEncoding = Encoding.UTF8;
-                            response.ContentType = "text/html; charset=utf-8";
-                            Stream output = response.OutputStream;
-                            output.Write(buffer, 0, buffer.Length);
-                            output.Close();
-                        }
-                        else if (request.Url.Segments.Contains("socks"))
-                        {
-                            WebSocketContext webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
-                            if (WebSocket != null)
-                            {
-                                try
-                                {
-                                    await WebSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+                                    byte[] buffer = Encoding.UTF8.GetBytes(responseString);
+                                    response.ContentLength64 = buffer.Length;
+                                    response.ContentEncoding = Encoding.UTF8;
+                                    response.ContentType = "text/html; charset=utf-8";
+                                    Stream output = response.OutputStream;
+                                    output.Write(buffer, 0, buffer.Length);
+                                    output.Close();
                                 }
-                                catch
+                                else if (request.Url.Segments.Contains("socks"))
                                 {
+                                    WebSocketContext webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
+                                    if (WebSocket != null)
+                                    {
+                                        try
+                                        {
+                                            await WebSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+                                        }
+                                        catch
+                                        {
 
+                                        }
+                                        finally
+                                        {
+                                            WebSocket = null;
+                                        }
+                                    }
+                                    WebSocket = webSocketContext.WebSocket;
                                 }
-                                finally
+                                else
                                 {
-                                    WebSocket = null;
+                                    HttpListenerResponse response = context.Response;
+                                    response.Abort();
                                 }
-                            }
-                            WebSocket = webSocketContext.WebSocket;
+                            });
+                            exec.Start();
                         }
-                        else
+                        catch
                         {
-                            HttpListenerResponse response = context.Response;
-                            response.Abort();
+                            //ignore
                         }
-                    });
-                    exec.Start();
-                }
-            });
-            t.IsBackground = true;
-            t.Start();
+                    }
+                });
+                t.IsBackground = true;
+                t.Start();
+            }
+            catch (HttpListenerException ex)
+            {
+                MessageBox.Show($"Failed to start local server on port 16470: {ex.Message}", "Port In Use", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
     }
 
