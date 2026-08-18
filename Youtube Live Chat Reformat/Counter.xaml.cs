@@ -1,6 +1,7 @@
 ﻿using LiteDB;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
@@ -15,7 +16,8 @@ namespace Youtube_Live_Chat_Reformat
     {
         private readonly MainWindow window;
         private bool pause;
-        private List<CounterData> counters = new List<CounterData>();
+        private readonly ObservableCollection<CounterData> counters = new ObservableCollection<CounterData>();
+        private readonly ObservableCollection<ChatData> displayedChats = new ObservableCollection<ChatData>();
         private List<Chart> charts = new List<Chart>();
         private readonly Thread t;
         private readonly List<ChatData> chatDatas = new List<ChatData>();
@@ -24,6 +26,8 @@ namespace Youtube_Live_Chat_Reformat
         {
             window = mainWindow;
             InitializeComponent();
+            grid.ItemsSource = displayedChats;
+            counter.ItemsSource = counters;
             LiteDatabase _liteDatabase = new LiteDatabase(window.liteDBString);
             var chat = _liteDatabase.GetCollection<ChatData>("chat");
             chatDatas.AddRange(chat.FindAll());
@@ -66,7 +70,7 @@ namespace Youtube_Live_Chat_Reformat
                 Thread.Sleep(200);
                 return;
             }
-            counters = new List<CounterData>();
+            List<CounterData> updatedCounters = new List<CounterData>();
             List<ChatData> snapshot;
             lock (_chatLock)
             {
@@ -127,11 +131,12 @@ namespace Youtube_Live_Chat_Reformat
                 {
                     try
                     {
-                        grid.ItemsSource = result.ToList();
-                        Count.Content = result.Count();
+                        List<ChatData> resultList = result.ToList();
+                        UpdateDisplayedChats(resultList);
+                        Count.Content = resultList.Count;
                         foreach (string filter in strFilters)
                         {
-                            counters.Add(new CounterData
+                            updatedCounters.Add(new CounterData
                             {
                                 Count = result.Count(x => x.Comment.StartsWith(filter)),
                                 Keyword = filter,
@@ -139,13 +144,13 @@ namespace Youtube_Live_Chat_Reformat
                         }
                         foreach (int filter in numFilters)
                         {
-                            counters.Add(new CounterData
+                            updatedCounters.Add(new CounterData
                             {
                                 Count = result.Count(x => x.Comment == filter.ToString()),
                                 Keyword = filter.ToString(),
                             });
                         }
-                        counter.ItemsSource = counters;
+                        UpdateCounters(updatedCounters);
                     }
                     catch
                     {
@@ -164,9 +169,10 @@ namespace Youtube_Live_Chat_Reformat
                         {
                             result = result.GroupBy(x => x.User).Select(x => x.First());
                         }
-                        grid.ItemsSource = result.ToList();
-                        Count.Content = result.Count();
-                        counter.ItemsSource = counters;
+                        List<ChatData> resultList = result.ToList();
+                        UpdateDisplayedChats(resultList);
+                        Count.Content = resultList.Count;
+                        UpdateCounters(updatedCounters);
                     }
                     catch
                     {
@@ -193,9 +199,51 @@ namespace Youtube_Live_Chat_Reformat
             }
             foreach (var chart in chartsSnapshot)
             {
-                chart.UpdateChart(counters);
+                chart.UpdateChart(counters.ToList());
             }
             Thread.Sleep(1000);
+        }
+
+        private void UpdateCounters(IList<CounterData> updatedCounters)
+        {
+            for (int i = 0; i < updatedCounters.Count; i++)
+            {
+                CounterData updated = updatedCounters[i];
+                if (i >= counters.Count)
+                {
+                    counters.Add(updated);
+                    continue;
+                }
+
+                CounterData current = counters[i];
+                current.Keyword = updated.Keyword;
+                current.Count = updated.Count;
+            }
+
+            while (counters.Count > updatedCounters.Count)
+            {
+                counters.RemoveAt(counters.Count - 1);
+            }
+        }
+
+        private void UpdateDisplayedChats(IList<ChatData> updatedChats)
+        {
+            for (int i = 0; i < updatedChats.Count; i++)
+            {
+                if (i >= displayedChats.Count)
+                {
+                    displayedChats.Add(updatedChats[i]);
+                }
+                else if (!ReferenceEquals(displayedChats[i], updatedChats[i]))
+                {
+                    displayedChats[i] = updatedChats[i];
+                }
+            }
+
+            while (displayedChats.Count > updatedChats.Count)
+            {
+                displayedChats.RemoveAt(displayedChats.Count - 1);
+            }
         }
 
         private bool QueryFilter(ChatData x, IEnumerable<string> strFilters, IEnumerable<int> numFilters)

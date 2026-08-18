@@ -27,10 +27,10 @@
         <Button Grid.Row="1" Grid.Column="2" Content="Clear Cache" Click="Button_Click"></Button>
         <Button Grid.Row="1" Grid.Column="3" Content="Stop" x:Name="pauseBtn" Click="Pause_Click"></Button>
         <Label Grid.Row="1" Grid.Column="1" x:Name="Count"/>
-        <DataGrid Grid.Row="2" Grid.ColumnSpan="4" x:Name="grid">
+        <DataGrid Grid.Row="2" Grid.ColumnSpan="4" x:Name="grid" IsReadOnly="True" CanUserAddRows="False">
 
         </DataGrid>
-        <DataGrid Grid.Row="3" Grid.ColumnSpan="4" x:Name="counter">
+        <DataGrid Grid.Row="3" Grid.ColumnSpan="4" x:Name="counter" IsReadOnly="True" CanUserAddRows="False">
 
         </DataGrid>
         <Button Grid.Row="4" Grid.Column="1" Content="Pie Chart" Click="Pie_Chart_Click"></Button>
