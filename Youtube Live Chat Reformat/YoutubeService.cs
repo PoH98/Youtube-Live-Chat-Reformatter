@@ -110,27 +110,85 @@ namespace Youtube_Live_Chat_Reformat
                         let memLogging = null;
                         let sponsorLogging = null;
 
-                        if(!txtLogging) {
-                            txtLogging = setInterval(function () {
-                                (function (t) {
-                                    if(t.length <= 0) return;
-                                    if (last != (cid = t[t.length - 1].id)) {
-                                        for (var e = t.length; e--;) {
-                                            if (last == t[e].id) return last = cid;
-                                            window.chrome.webview.postMessage({
-                                                type: 'text',
-                                                cid: cid,
-                                                name: t[e].children[1].children[1].children[1].textContent,
-                                                text: t[e].children[1].children[3].textContent,
-                                                html: t[e].outerHTML
-                                            });
-                                            last = cid;
-                                            return;
-                                        }
+                        function getMessageText(element) {
+                            return Array.from(element.childNodes)
+                                .map(node => {
+                                    if (node.nodeType === Node.TEXT_NODE) {
+                                        return node.textContent;
                                     }
-                                })(document.getElementsByTagName('yt-live-chat-text-message-renderer'));
-                            }, 25);
+
+                                    if (node instanceof HTMLImageElement) {
+                                        return node.alt || '';
+                                    }
+
+                                    return node.textContent || '';
+                                })
+                                .join('')
+                                .trim();
                         }
+
+                        const seenTextMessages = new Set();
+
+                        function postTextMessage(item) {
+                            if (item.closest('yt-live-chat-banner-renderer') ||
+                                item.classList.contains('yt-live-chat-banner-renderer')) return;
+
+                            const cid = item.id;
+                            if (!cid || seenTextMessages.has(cid)) return;
+
+                            const author = item.querySelector('#author-name');
+                            const message = item.querySelector('#message');
+                            if (!author || !message) return;
+
+                            seenTextMessages.add(cid);
+                            window.chrome.webview.postMessage({
+                                type: 'text',
+                                cid: cid,
+                                name: author.textContent.trim(),
+                                text: getMessageText(message),
+                                html: item.outerHTML
+                            });
+                        }
+
+                        function attachTextMessageObserver() {
+                            const items = document.querySelector('yt-live-chat-item-list-renderer #items');
+                            if (!items) return false;
+
+                            document.querySelectorAll('yt-live-chat-text-message-renderer')
+                                .forEach(item => {
+                                    if (item.id &&
+                                        !item.closest('yt-live-chat-banner-renderer') &&
+                                        !item.classList.contains('yt-live-chat-banner-renderer')) {
+                                        seenTextMessages.add(item.id);
+                                    }
+                                });
+
+                            const observer = new MutationObserver(mutations => {
+                                mutations.forEach(mutation => {
+                                    mutation.addedNodes.forEach(node => {
+                                        if (!(node instanceof Element)) return;
+
+                                        const item = node.matches('yt-live-chat-text-message-renderer')
+                                            ? node
+                                            : node.closest('yt-live-chat-text-message-renderer');
+                                        if (item) postTextMessage(item);
+
+                                        node.querySelectorAll('yt-live-chat-text-message-renderer')
+                                            .forEach(postTextMessage);
+                                    });
+                                });
+                            });
+
+                            observer.observe(items, { childList: true, subtree: true });
+                            return true;
+                        }
+
+                        txtLogging = setInterval(function () {
+                            if (attachTextMessageObserver()) {
+                                clearInterval(txtLogging);
+                                txtLogging = null;
+                            }
+                        }, 100);
 
                         if(!scLogging) {
                             scLogging = setInterval(function () {
