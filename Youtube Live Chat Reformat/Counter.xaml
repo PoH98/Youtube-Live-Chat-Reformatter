@@ -4,8 +4,9 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Youtube_Live_Chat_Reformat"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         mc:Ignorable="d"
-        Title="Counter" Height="450" Width="1000" Loaded="Window_Loaded">
+        Title="Counter" Height="450" Width="1000" Loaded="Window_Loaded" Closing="Window_Closing">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition></ColumnDefinition>
@@ -27,12 +28,7 @@
         <Button Grid.Row="1" Grid.Column="2" Content="Clear Cache" Click="Button_Click"></Button>
         <Button Grid.Row="1" Grid.Column="3" Content="Stop" x:Name="pauseBtn" Click="Pause_Click"></Button>
         <Label Grid.Row="1" Grid.Column="1" x:Name="Count"/>
-        <DataGrid Grid.Row="2" Grid.ColumnSpan="4" x:Name="grid" IsReadOnly="True" CanUserAddRows="False">
-
-        </DataGrid>
-        <DataGrid Grid.Row="3" Grid.ColumnSpan="4" x:Name="counter" IsReadOnly="True" CanUserAddRows="False">
-
-        </DataGrid>
+        <wv2:WebView2 Grid.Row="2" Grid.RowSpan="2" Grid.ColumnSpan="4" x:Name="tableView" />
         <Button Grid.Row="4" Grid.Column="1" Content="Pie Chart" Click="Pie_Chart_Click"></Button>
         <Button Grid.Row="4" Content="Line Chart" Click="Line_Chart_Click"></Button>
         <Label Grid.Row="4" Grid.Column="2" Content="SC Count:"/>

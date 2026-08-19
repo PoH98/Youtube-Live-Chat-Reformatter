@@ -1,11 +1,16 @@
 ﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Web;
+using System.Xml;
 
 namespace Youtube_Live_Chat_Reformat
 {
@@ -13,6 +18,10 @@ namespace Youtube_Live_Chat_Reformat
     {
         private WebView2 browser;
         private string webPath;
+        private static readonly HttpClient httpClient = CreateHttpClient();
+        private static readonly SemaphoreSlim channelLookupGate = new SemaphoreSlim(2, 2);
+        private readonly ConcurrentDictionary<string, Task<string>> channelNames =
+            new ConcurrentDictionary<string, Task<string>>();
 
         internal event EventHandler<CommentEvent> CommentReceived;
         internal event EventHandler<string> YoutubeChatFound;
@@ -144,6 +153,9 @@ namespace Youtube_Live_Chat_Reformat
                             window.chrome.webview.postMessage({
                                 type: 'text',
                                 cid: cid,
+                                channelId: item.data && item.data.authorExternalChannelId
+                                    ? item.data.authorExternalChannelId
+                                    : '',
                                 name: author.textContent.trim(),
                                 text: getMessageText(message),
                                 html: item.outerHTML
@@ -203,6 +215,9 @@ namespace Youtube_Live_Chat_Reformat
                                                 window.chrome.webview.postMessage({
                                                     type: 'superchat',
                                                     cid: cid,
+                                                    channelId: t[e].data && t[e].data.authorExternalChannelId
+                                                        ? t[e].data.authorExternalChannelId
+                                                        : '',
                                                     name: userName,
                                                     text: t[e].children[0].children[1].children[0].textContent,
                                                     amount: amount,
@@ -227,6 +242,9 @@ namespace Youtube_Live_Chat_Reformat
                                             window.chrome.webview.postMessage({
                                                 type: 'text',
                                                 cid: cid,
+                                                channelId: t[e].data && t[e].data.authorExternalChannelId
+                                                    ? t[e].data.authorExternalChannelId
+                                                    : '',
                                                 name: t[e].children[0].children[0].children[1].textContent,
                                                 text: t[e].children[0].children[1].textContent,
                                                 html: t[e].outerHTML
@@ -249,6 +267,9 @@ namespace Youtube_Live_Chat_Reformat
                                             window.chrome.webview.postMessage({
                                                 type: 'text',
                                                 cid: cid,
+                                                channelId: t[e].data && t[e].data.authorExternalChannelId
+                                                    ? t[e].data.authorExternalChannelId
+                                                    : '',
                                                 name: t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[0].textContent,
                                                 text: t[e].children[0].children[0].children[0].children[3].children[0].children[0].children[2].textContent,
                                                 html: t[e].outerHTML
@@ -285,7 +306,7 @@ namespace Youtube_Live_Chat_Reformat
 
         private string lastId;
 
-        private void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        private async void CoreWebView2_WebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             {
@@ -299,6 +320,19 @@ namespace Youtube_Live_Chat_Reformat
                 lastId = cid;
 
                 string name = root.GetProperty("name").GetString();
+                if (root.TryGetProperty("channelId", out JsonElement channelIdElement))
+                {
+                    string channelId = channelIdElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(channelId))
+                    {
+                        string resolvedName = await channelNames.GetOrAdd(channelId, ResolveChannelNameAsync);
+                        if (!string.IsNullOrWhiteSpace(resolvedName))
+                        {
+                            name = resolvedName;
+                        }
+                    }
+                }
+
                 string text = root.GetProperty("text").GetString();
                 string html = root.GetProperty("html").GetString();
 
@@ -328,6 +362,70 @@ namespace Youtube_Live_Chat_Reformat
             {
                 // Ignored
             }
+        }
+
+        private static async Task<string> ResolveChannelNameAsync(string channelId)
+        {
+            string feedUrl = "https://www.youtube.com/feeds/videos.xml?channel_id=" +
+                Uri.EscapeDataString(channelId);
+
+            try
+            {
+                await channelLookupGate.WaitAsync();
+                try
+                {
+                    using (HttpResponseMessage response = await httpClient.GetAsync(
+                        feedUrl,
+                        HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        using (Stream stream = await response.Content.ReadAsStreamAsync())
+                        using (XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings
+                        {
+                            Async = true,
+                            DtdProcessing = DtdProcessing.Prohibit,
+                            XmlResolver = null
+                        }))
+                        {
+                            bool insideAuthor = false;
+                            while (await reader.ReadAsync())
+                            {
+                                if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "author")
+                                {
+                                    insideAuthor = true;
+                                }
+                                else if (insideAuthor &&
+                                         reader.NodeType == XmlNodeType.Element &&
+                                         reader.LocalName == "name")
+                                {
+                                    return (await reader.ReadElementContentAsStringAsync()).Trim();
+                                }
+                                else if (reader.NodeType == XmlNodeType.EndElement && reader.LocalName == "author")
+                                {
+                                    insideAuthor = false;
+                                }
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    channelLookupGate.Release();
+                }
+            }
+            catch
+            {
+                // Fall back to the handle supplied by the live chat renderer.
+            }
+
+            return null;
+        }
+
+        private static HttpClient CreateHttpClient()
+        {
+            HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36");
+            return client;
         }
 
         public void Dispose()

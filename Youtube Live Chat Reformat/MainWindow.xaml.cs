@@ -30,9 +30,13 @@ namespace Youtube_Live_Chat_Reformat
         public string liteDBString;
         private Counter Counter;
         private WebSocket WebSocket;
+        private LiteDatabase database;
         private ILiteCollection<ChatData> collection;
         private readonly SemaphoreSlim _webSocketLock = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim _commentLock = new SemaphoreSlim(1, 1);
         private ResourceHandlerService resourceHandler;
+        private string lastUser;
+        private string lastComment;
 
         public MainWindow()
         {
@@ -73,6 +77,7 @@ namespace Youtube_Live_Chat_Reformat
                 Uri uri = new Uri(((MainWindowContext)DataContext).Url);
                 NameValueCollection query = HttpUtility.ParseQueryString(uri.Query);
                 liteDBString = "Filename=Temp\\" + query.Get("v") + ";Connection=shared; journal=false";
+                ResetDatabaseConnection();
                 _youtubeService.LoadChat(((MainWindowContext)DataContext).Url);
                 if (Counter != null)
                 {
@@ -88,18 +93,21 @@ namespace Youtube_Live_Chat_Reformat
 
         private async void _youtubeService_CommentReceived(object sender, YoutubeService.CommentEvent e)
         {
-            if (collection == null)
-            {
-                if (string.IsNullOrEmpty(liteDBString)) return;
-
-                LiteDatabase _liteDatabase = new LiteDatabase(liteDBString);
-                collection = _liteDatabase.GetCollection<ChatData>("chat");
-            }
-            IEnumerable<ChatData> list = collection.FindAll();
+            await _commentLock.WaitAsync();
             try
             {
-                ChatData last = list.Count() > 0 ? list.Last() : new ChatData();
-                if (!(last.User == e.User && last.Comment == e.Comment))
+                if (collection == null)
+                {
+                    if (string.IsNullOrEmpty(liteDBString)) return;
+
+                    database = new LiteDatabase(liteDBString);
+                    collection = database.GetCollection<ChatData>("chat");
+                    ChatData last = collection.FindAll().LastOrDefault();
+                    lastUser = last?.User;
+                    lastComment = last?.Comment;
+                }
+
+                if (!(lastUser == e.User && lastComment == e.Comment))
                 {
                     if (WebSocket != null && WebSocket.State == WebSocketState.Open)
                     {
@@ -128,6 +136,8 @@ namespace Youtube_Live_Chat_Reformat
                             SCAmount = e.SuperChat ? e.SuperChatAmount : 0
                         };
                         _ = collection.Insert(insert);
+                        lastUser = e.User;
+                        lastComment = e.Comment;
                         if (Counter != null)
                         {
                             Counter.AddMessage(insert);
@@ -137,8 +147,21 @@ namespace Youtube_Live_Chat_Reformat
             }
             catch
             {
-
+                // Keep chat ingestion alive if a single message fails.
             }
+            finally
+            {
+                _commentLock.Release();
+            }
+        }
+
+        private void ResetDatabaseConnection()
+        {
+            collection = null;
+            database?.Dispose();
+            database = null;
+            lastUser = null;
+            lastComment = null;
         }
 
         private void _youtubeService_YoutubeChatFound(object sender, string e)
@@ -146,6 +169,7 @@ namespace Youtube_Live_Chat_Reformat
             Uri uri = new Uri(e);
             NameValueCollection query = HttpUtility.ParseQueryString(uri.Query);
             liteDBString = "Filename=Temp\\" + query.Get("v") + ";Connection=shared; journal=false";
+            ResetDatabaseConnection();
             Dispatcher.Invoke(() =>
             {
                 ((MainWindowContext)DataContext).Url = "https://studio.youtube.com/live_chat?is_popout=1&v=" + query.Get("v");

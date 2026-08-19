@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; font: 13px "Segoe UI", sans-serif; color: #202124; }
+        body { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; padding: 8px; background: #f3f4f6; }
+        section { min-width: 0; overflow: auto; background: white; border: 1px solid #d5d8dc; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th { position: sticky; top: 0; z-index: 1; background: #eef1f4; text-align: left; }
+        th, td { padding: 6px 8px; border-bottom: 1px solid #e6e8eb; overflow-wrap: anywhere; }
+        #messages th:first-child { width: 32%; }
+        #counts th:last-child { width: 80px; }
+        #messages tbody tr { cursor: pointer; }
+        #messages tbody tr:hover { background: #eef6ff; }
+        #messages tbody tr.selected { background: #b9dcff; outline: 1px solid #4b9fea; outline-offset: -1px; }
+        .empty { padding: 16px; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <section id="message-scroll"><table id="messages"><thead><tr><th>User</th><th>Comment</th></tr></thead><tbody></tbody></table></section>
+    <section><table id="counts"><thead><tr><th>Keyword</th><th>Count</th></tr></thead><tbody></tbody></table></section>
+    <script>
+        function cell(value) {
+            const td = document.createElement('td');
+            td.textContent = value == null ? '' : String(value);
+            return td;
+        }
+
+        let selectedMessageKey = null;
+
+        function messageKey(row, occurrence) {
+            return `${row.user || ''}\u241f${row.comment || ''}\u241f${occurrence}`;
+        }
+
+        function replaceRows(tableId, rows, fields) {
+            const body = document.querySelector(`#${tableId} tbody`);
+            const fragment = document.createDocumentFragment();
+            const occurrences = new Map();
+            let firstMessageRow = null;
+            let selectedMessageRow = null;
+            for (const row of rows) {
+                const tr = document.createElement('tr');
+                for (const field of fields) tr.appendChild(cell(row[field]));
+                if (tableId === 'messages') {
+                    const contentKey = `${row.user || ''}\u241f${row.comment || ''}`;
+                    const occurrence = occurrences.get(contentKey) || 0;
+                    occurrences.set(contentKey, occurrence + 1);
+                    tr.dataset.key = messageKey(row, occurrence);
+                    if (!firstMessageRow) firstMessageRow = tr;
+                    if (tr.dataset.key === selectedMessageKey) selectedMessageRow = tr;
+                }
+                fragment.appendChild(tr);
+            }
+
+            if (tableId === 'messages') {
+                const rowToSelect = selectedMessageRow || firstMessageRow;
+                if (rowToSelect) {
+                    selectedMessageKey = rowToSelect.dataset.key;
+                    rowToSelect.classList.add('selected');
+                } else {
+                    selectedMessageKey = null;
+                }
+            }
+            body.replaceChildren(fragment);
+        }
+
+        window.updateTables = function (data) {
+            const messageScroll = document.getElementById('message-scroll');
+            const distanceFromBottom = messageScroll.scrollHeight - messageScroll.scrollTop - messageScroll.clientHeight;
+            const shouldFollowBottom = distanceFromBottom <= 24;
+            const previousScrollTop = messageScroll.scrollTop;
+            const visibleRows = Array.from(document.querySelectorAll('#messages tbody tr'));
+            const anchorRow = visibleRows.find(row =>
+                row.offsetTop + row.offsetHeight > previousScrollTop);
+            const anchorKey = anchorRow ? anchorRow.dataset.key : null;
+            const anchorOffset = anchorRow ? anchorRow.offsetTop - previousScrollTop : 0;
+
+            replaceRows('messages', data.messages || [], ['user', 'comment']);
+            replaceRows('counts', data.counters || [], ['keyword', 'count']);
+
+            requestAnimationFrame(() => {
+                if (shouldFollowBottom) {
+                    messageScroll.scrollTop = messageScroll.scrollHeight;
+                    return;
+                }
+
+                const restoredAnchor = anchorKey
+                    ? Array.from(document.querySelectorAll('#messages tbody tr'))
+                        .find(row => row.dataset.key === anchorKey)
+                    : null;
+                messageScroll.scrollTop = restoredAnchor
+                    ? restoredAnchor.offsetTop - anchorOffset
+                    : previousScrollTop;
+            });
+        };
+
+        document.querySelector('#messages tbody').addEventListener('click', event => {
+            const row = event.target.closest('tr');
+            if (!row) return;
+
+            document.querySelectorAll('#messages tbody tr.selected')
+                .forEach(item => item.classList.remove('selected'));
+            selectedMessageKey = row.dataset.key;
+            row.classList.add('selected');
+        });
+    </script>
+</body>
+</html>
